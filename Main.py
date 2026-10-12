@@ -44,6 +44,31 @@ if Config.TELEGRAM_MODE == "polling":
 else:
     logger.info(f"[Main] Running in Webhook mode. Set webhook to /telegram/webhook endpoint.")
 
+# Start Keep-Alive pinger for cloud platforms (e.g. Render Free Tier)
+def _start_keep_alive():
+    import time
+    import threading
+    import requests
+    target_url = os.getenv("RENDER_EXTERNAL_URL", "").strip() or os.getenv("KEEP_ALIVE_URL", "").strip()
+    if not target_url:
+        return
+
+    health_url = f"{target_url.rstrip('/')}/health"
+    def _ping_loop():
+        logger.info(f"[KeepAlive] Started keep-alive pinger for: {health_url}")
+        time.sleep(60)
+        while True:
+            try:
+                requests.get(health_url, timeout=10)
+                logger.info("[KeepAlive] Self-ping sent to keep service awake.")
+            except Exception as e:
+                logger.debug(f"[KeepAlive] Ping failed: {e}")
+            time.sleep(600)  # Ping every 10 minutes
+
+    threading.Thread(target=_ping_loop, daemon=True, name="KeepAliveWorker").start()
+
+_start_keep_alive()
+
 
 @app.route("/", methods=["GET"])
 @app.route("/health", methods=["GET"])

@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: job-alert-telegrambot
+    env: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 1 -b 0.0.0.0:$PORT Main:app
+    autoDeploy: true
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_MODE
+        value: polling
+      - key: FB_COOKIE
+        sync: false
+      - key: FB_DEMO_FALLBACK
+        value: "false"
+      - key: FASTWORK_ENABLED
+        value: "true"
+      - key: FACEBOOK_ENABLED
+        value: "true"
+      - key: POLL_INTERVAL_SECONDS
+        value: "30"
+      - key: PYTHON_VERSION
+        value: 3.11.9
