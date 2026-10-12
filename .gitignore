@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+jobs.db
+*.db
+.vscode/
+.idea/
+venv/
+.venv/
