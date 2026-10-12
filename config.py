@@ -58,8 +58,8 @@ class Config:
     # Enable simulation demo data when no FB credentials exist
     FB_DEMO_FALLBACK = os.getenv("FB_DEMO_FALLBACK", "true").lower() in ("true", "1", "yes")
 
-    # Server Port (for Flask health check and webhook)
-    PORT = int(os.getenv("PORT", "5000"))
+    # Server Port (default 8000 for Koyeb / reads $PORT for Railway/Render)
+    PORT = int(os.getenv("PORT", "8000"))
 
     # Default AI Job Search Prompt for subscribers without custom prompt
     DEFAULT_PROMPT = os.getenv("DEFAULT_PROMPT", "งานเขียนโปรแกรม ซอฟต์แวร์ ทำเว็บ แอปพลิเคชัน และ AI").strip()
