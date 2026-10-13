@@ -102,15 +102,11 @@ class TelegramPollingWorker:
 
                         text = msg.get("text", "")
                         if chat_id and text:
-                            try:
-                                self.handler.handle_message(
-                                    chat_id=chat_id,
-                                    text=text,
-                                    user_name=user_name,
-                                    chat_type=chat_type
-                                )
-                            except Exception as handle_err:
-                                logger.error(f"[TelegramPolling] Error handling message: {handle_err}", exc_info=True)
+                            threading.Thread(
+                                target=self._safe_handle_message,
+                                args=(chat_id, text, user_name, chat_type),
+                                daemon=True
+                            ).start()
 
                     # 2. Process inline keyboard callback query (button clicks)
                     elif "callback_query" in update:
@@ -124,14 +120,11 @@ class TelegramPollingWorker:
                         self._answer_callback_query(cb_id)
 
                         if chat_id and data_text:
-                            try:
-                                self.handler.handle_message(
-                                    chat_id=chat_id,
-                                    text=data_text,
-                                    user_name=user_name
-                                )
-                            except Exception as cb_err:
-                                logger.error(f"[TelegramPolling] Error handling callback query: {cb_err}", exc_info=True)
+                            threading.Thread(
+                                target=self._safe_handle_message,
+                                args=(chat_id, data_text, user_name, "user"),
+                                daemon=True
+                            ).start()
 
             except requests.exceptions.Timeout:
                 # Normal for long-polling when no updates arrived within timeout
@@ -142,3 +135,16 @@ class TelegramPollingWorker:
             except Exception as e:
                 logger.error(f"[TelegramPolling] Unexpected loop error: {e}")
                 time.sleep(3)
+
+    def _safe_handle_message(self, chat_id, text, user_name, chat_type):
+        """Execute message handler inside dedicated thread with error trapping."""
+        try:
+            self.handler.handle_message(
+                chat_id=chat_id,
+                text=text,
+                user_name=user_name,
+                chat_type=chat_type
+            )
+        except Exception as handle_err:
+            logger.error(f"[TelegramPolling] Error handling message in thread: {handle_err}", exc_info=True)
+

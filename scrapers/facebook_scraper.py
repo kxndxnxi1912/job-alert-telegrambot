@@ -43,11 +43,19 @@ class FacebookScraper:
 
         # 2. Fetch using FB Cookies if provided
         if self.cookie and self.group_ids:
+            consecutive_failures = 0
             for group_id in self.group_ids:
                 try:
                     group_jobs = self._fetch_from_mbasic(group_id)
-                    jobs.extend(group_jobs)
-                    time.sleep(0.4)  # Small pause to avoid burst rate-limiting
+                    if group_jobs:
+                        jobs.extend(group_jobs)
+                        consecutive_failures = 0
+                    else:
+                        consecutive_failures += 1
+                        if consecutive_failures >= 3:
+                            logger.info("[Facebook mbasic] 3 consecutive groups returned no posts or require login. Stopping Facebook scan to avoid delay.")
+                            break
+                    time.sleep(0.2)
                 except Exception as e:
                     logger.error(f"[Facebook mbasic] Error scraping group {group_id}: {e}")
 
@@ -155,7 +163,7 @@ class FacebookScraper:
         headers = dict(self.HEADERS)
         headers["Cookie"] = self.cookie
 
-        resp = requests.get(url, headers=headers, timeout=12)
+        resp = requests.get(url, headers=headers, timeout=4)
         if resp.status_code != 200:
             logger.warning(f"[Facebook mbasic] Status {resp.status_code} for {url}")
             return []
