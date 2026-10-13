@@ -228,15 +228,18 @@ class PromptAnalyzer:
                 if tw not in expanded_keywords:
                     expanded_keywords.append(tw)
 
-        # Fallback if no specific tech matched
-        if not expanded_keywords:
-            expanded_keywords = [target_subject]
-            core_terms = [target_subject]
-
-        # Build clean user-facing target title
-        clean_title = target_subject
-        if not clean_title.startswith("งาน") and not clean_title.startswith("สาย"):
-            clean_title = f"งาน{clean_title}"
+        # Fallback if no specific tech matched, or if generic "หางาน" was typed
+        if not expanded_keywords or (len(expanded_keywords) == 1 and expanded_keywords[0] in ("หางาน", "งาน", "ช่วยหางาน", "ค้นหางาน", "งานหางาน", "รับงาน", "หาโปรเจกต์")):
+            from config import Config
+            expanded_keywords = list(Config.DEFAULT_KEYWORDS)
+            core_terms = ["เขียนโปรแกรม", "เว็บ", "ai", "mobile app", "ซอฟต์แวร์"]
+            matched_domains = ["งานพัฒนาซอฟต์แวร์ / ไอที / AI ทั่วไป"]
+            clean_title = "งานพัฒนาซอฟต์แวร์, เว็บ, แอป และ AI"
+        else:
+            # Build clean user-facing target title
+            clean_title = target_subject
+            if not clean_title.startswith("งาน") and not clean_title.startswith("สาย"):
+                clean_title = f"งาน{clean_title}"
 
         return {
             "raw_prompt": raw,
