@@ -85,6 +85,8 @@ class Setting(Base):
 connect_args = {}
 if Config.DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
+elif "postgresql" in Config.DATABASE_URL:
+    connect_args = {"connect_timeout": 5}
 
 try:
     engine = create_engine(
