@@ -61,8 +61,11 @@ class Config:
     # Server Port (default 8000 for Koyeb / reads $PORT for Railway/Render)
     PORT = int(os.getenv("PORT", "8000"))
 
+    # Optional Google Gemini API Key for 100% LLM prompt reasoning
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+
     # Default AI Job Search Prompt for subscribers without custom prompt
-    DEFAULT_PROMPT = os.getenv("DEFAULT_PROMPT", "งานเขียนโปรแกรม ซอฟต์แวร์ ทำเว็บ แอปพลิเคชัน และ AI").strip()
+    DEFAULT_PROMPT = os.getenv("DEFAULT_PROMPT", "งานเกี่ยวกับ AI, ซอฟต์แวร์, การเขียนโค้ด (Coding & AI Engineering)").strip()
 
     # Default Keywords preset
     DEFAULT_KEYWORDS = [

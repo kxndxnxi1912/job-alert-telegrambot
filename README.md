@@ -96,6 +96,15 @@ python Main.py
 
 ---
 
+## 🧠 สถาปัตยกรรม Prompt AI 100% (No Dumb Keywords)
+
+บอทเวอร์ชันนี้ยกเลิกระบบค้นหาแบบคำเดี่ยว (Substring Keyword Matching) โดยสิ้นเชิง เพื่อป้องกันปัญหาคำว่า "โปรแกรม" ไปติดงาน "โปรแกรมบัญชี" หรือ "โปรแกรม Excel"  
+ระบบเปลี่ยนมาใช้ **`PromptAIEngine`** แบบ 2 ระดับ:
+1. **Google Gemini LLM API (ตัวเลือกเสริม):** หากตั้งค่า `GEMINI_API_KEY` บอทจะใช้โมเดล Gemini วิเคราะห์บทบาทและเจตนาของงานแบบ 100%
+2. **High-Precision Built-in Semantic AI (ทำงานอัตโนมัติ 0 บาท):** ระบบวิเคราะห์บทบาทหน้าที่ (Role Classification), การกระทำ (Action Verbs), และระบบ **Blacklist ตัดงานนอกสาย 100%** (เช่น บัญชี, ธุรการ, พิมพ์งาน, แอดมิน, งานช่าง, แบบสอบถาม, บันทึกเสียง) เพื่อให้มีเฉพาะงาน Software, Coding, Web, Mobile และ AI เท่านั้นที่ผ่านการแจ้งเตือน!
+
+---
+
 ## 🛠️ โครงสร้างโปรเจกต์ (Project Structure)
 
 ```text
@@ -105,14 +114,14 @@ D:\PreTest\TelegramBotFwFB\
 ├── database.py                  # ระบบจัดการฐานข้อมูล SQLite/PostgreSQL (SQLAlchemy)
 ├── telegram_handler.py          # ตัวจัดการคำสั่งและ Prompt AI ของ Telegram
 ├── telegram_polling.py          # ระบบ Long Polling รับข้อความจาก Telegram แบบไม่ต้องใช้ ngrok
-├── worker.py                    # Background Worker สแกนงาน Fastwork & Facebook
+├── worker.py                    # Background Worker สแกนงาน Fastwork & Facebook ด้วย Prompt AI
 ├── requirements.txt             # รายการ Library ที่ใช้งาน
 ├── .env                         # ไฟล์เก็บกุญแจลับและ Token
 ├── .env.example                 # ตัวอย่างไฟล์คอนฟิก
 ├── notifier/
-│   ├── telegram_notifier.py     # ตัวจัดรูปแบบข้อความ HTML และส่งแจ้งเตือนผ่าน Telegram API
-│   ├── prompt_analyzer.py       # ระบบ NLP วิเคราะห์ภาษาธรรมชาติและจับกลุ่มคำศัพท์ไอที
-│   └── matcher.py               # ระบบจับคู่และให้คะแนนความเกี่ยวข้องของงาน
+│   ├── prompt_ai_engine.py      # 🧠 ขุมพลังหลัก Prompt AI 100% (Gemini LLM + Built-in Semantic AI)
+│   ├── telegram_notifier.py     # ตัวจัดรูปแบบข้อความ HTML แสดงผลวิเคราะห์ AI และส่งแจ้งเตือน
+│   └── prompt_analyzer.py       # ระบบวิเคราะห์เจตนาข้อความของผู้ใช้
 └── scrapers/
     ├── fastwork_scraper.py      # ดึงงานสดจาก Fastwork API (กรองงานไม่หมดอายุ 1 สัปดาห์)
     └── facebook_scraper.py      # ดึงโพสต์งานจากกลุ่ม Facebook

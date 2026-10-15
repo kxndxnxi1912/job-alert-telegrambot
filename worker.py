@@ -65,25 +65,25 @@ class JobMonitorWorker:
         subscribers: list[str],
         user_prompts: dict[str, str],
         default_prompt: str
-    ) -> tuple[list[str], list[str]]:
+    ) -> tuple[list[str], dict]:
         """
-        Evaluate a single job against all subscribers' AI prompts.
+        Evaluate a single job against all subscribers' AI prompts using PromptAIEngine.
         Returns:
-            (target_subscribers_to_alert, matched_terms_summary)
+            (target_subscribers_to_alert, ai_eval_result)
         """
-        from notifier.prompt_analyzer import PromptAnalyzer
+        from notifier.prompt_ai_engine import PromptAIEngine
 
         matched_subscribers = []
-        all_matched_terms = set()
+        last_eval = {}
 
         for sub_id in subscribers:
             prompt = user_prompts.get(sub_id) or default_prompt
-            is_match, terms = PromptAnalyzer.matches_job_prompt(job, prompt)
-            if is_match:
+            eval_result = PromptAIEngine.evaluate_job(job, prompt)
+            if eval_result.get("is_match"):
                 matched_subscribers.append(sub_id)
-                all_matched_terms.update(terms)
+                last_eval = eval_result
 
-        return matched_subscribers, sorted(list(all_matched_terms))
+        return matched_subscribers, last_eval
 
     def check_jobs(self) -> dict:
         """
@@ -120,8 +120,8 @@ class JobMonitorWorker:
                     if not post_id:
                         continue
 
-                    # Evaluate match against all subscribers' prompts
-                    matched_subs, matched_terms = self._evaluate_job_for_subscribers(
+                    # Evaluate match against all subscribers' prompts via Prompt AI
+                    matched_subs, ai_eval = self._evaluate_job_for_subscribers(
                         job, subscribers, user_prompts, default_prompt
                     )
                     if not matched_subs:
@@ -132,11 +132,17 @@ class JobMonitorWorker:
                     if not pending_subs:
                         continue
 
+                    matched_signals = ai_eval.get("matched_skills") or ai_eval.get("matched_signals") or []
                     stats["fastwork_matched"] += 1
-                    logger.info(f"[Worker] Fastwork Prompt AI match: '{job.get('title')}' for {len(pending_subs)} subscribers | Terms: {matched_terms}")
-                    
-                    # Send alert to pending subscribers only
-                    sent_count = self.notifier.send_job_alert(job, matched_terms, target_ids=pending_subs)
+                    logger.info(
+                        f"[Worker] Fastwork Prompt AI match: '{job.get('title')}' for {len(pending_subs)} subscribers | "
+                        f"Category: {ai_eval.get('role_category')} | Signals: {matched_signals}"
+                    )
+
+                    # Send alert to pending subscribers with Prompt AI analysis
+                    sent_count = self.notifier.send_job_alert(
+                        job, matched_keywords=matched_signals, target_ids=pending_subs, ai_result=ai_eval
+                    )
                     if sent_count > 0:
                         stats["fastwork_alerted"] += sent_count
                         for sub_id in pending_subs:
@@ -152,7 +158,7 @@ class JobMonitorWorker:
                         content=job.get("content"),
                         budget=job.get("budget"),
                         url=job.get("url"),
-                        matched_keywords=", ".join(matched_terms)
+                        matched_keywords=f"[{ai_eval.get('role_category')}] {', '.join(matched_signals)}"
                     )
             except Exception as e:
                 logger.error(f"[Worker] Error checking Fastwork: {e}")
@@ -167,8 +173,8 @@ class JobMonitorWorker:
                     if not post_id:
                         continue
 
-                    # Evaluate match against all subscribers' prompts
-                    matched_subs, matched_terms = self._evaluate_job_for_subscribers(
+                    # Evaluate match against all subscribers' prompts via Prompt AI
+                    matched_subs, ai_eval = self._evaluate_job_for_subscribers(
                         post, subscribers, user_prompts, default_prompt
                     )
                     if not matched_subs:
@@ -179,11 +185,17 @@ class JobMonitorWorker:
                     if not pending_subs:
                         continue
 
+                    matched_signals = ai_eval.get("matched_skills") or ai_eval.get("matched_signals") or []
                     stats["facebook_matched"] += 1
-                    logger.info(f"[Worker] Facebook Prompt AI match: '{post.get('title')}' from '{post.get('group_name')}' for {len(pending_subs)} subscribers | Terms: {matched_terms}")
+                    logger.info(
+                        f"[Worker] Facebook Prompt AI match: '{post.get('title')}' from '{post.get('group_name')}' for {len(pending_subs)} subscribers | "
+                        f"Category: {ai_eval.get('role_category')} | Signals: {matched_signals}"
+                    )
 
-                    # Send alert to pending subscribers only
-                    sent_count = self.notifier.send_job_alert(post, matched_terms, target_ids=pending_subs)
+                    # Send alert to pending subscribers with Prompt AI analysis
+                    sent_count = self.notifier.send_job_alert(
+                        post, matched_keywords=matched_signals, target_ids=pending_subs, ai_result=ai_eval
+                    )
                     if sent_count > 0:
                         stats["facebook_alerted"] += sent_count
                         for sub_id in pending_subs:
@@ -199,7 +211,7 @@ class JobMonitorWorker:
                         content=post.get("content"),
                         budget=post.get("budget"),
                         url=post.get("url"),
-                        matched_keywords=", ".join(matched_terms)
+                        matched_keywords=f"[{ai_eval.get('role_category')}] {', '.join(matched_signals)}"
                     )
             except Exception as e:
                 logger.error(f"[Worker] Error checking Facebook: {e}")

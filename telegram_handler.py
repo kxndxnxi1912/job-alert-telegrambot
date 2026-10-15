@@ -48,11 +48,11 @@ class TelegramCommandHandler:
     def __init__(self, notifier: TelegramNotifier):
         self.notifier = notifier
 
-    def _search_live_jobs(self, keywords: list[str], core_terms: list[str] = None) -> list[dict]:
-        """Fetch current jobs from Fastwork & Facebook and rank them against keywords."""
+    def _search_live_jobs(self, user_prompt: str = "") -> list[dict]:
+        """Fetch current jobs from Fastwork & Facebook and evaluate using PromptAIEngine."""
         from scrapers.fastwork_scraper import FastworkScraper
         from scrapers.facebook_scraper import FacebookScraper
-        from notifier.matcher import KeywordMatcher
+        from notifier.prompt_ai_engine import PromptAIEngine
 
         all_jobs = []
         try:
@@ -67,19 +67,19 @@ class TelegramCommandHandler:
         except Exception as e:
             logger.warning(f"[TelegramHandler] Error fetching Facebook for live search: {e}")
 
-        scored = []
+        matched_jobs = []
         for job in all_jobs:
-            matched_kws = KeywordMatcher.matches_job(job, keywords)
-            if matched_kws:
-                score = KeywordMatcher.score_job(job, keywords, core_terms)
+            eval_res = PromptAIEngine.evaluate_job(job, user_prompt)
+            if eval_res.get("is_match"):
                 job_copy = dict(job)
-                job_copy["matched_keywords"] = matched_kws
-                job_copy["score"] = score
-                scored.append(job_copy)
+                job_copy["ai_eval"] = eval_res
+                job_copy["matched_keywords"] = eval_res.get("matched_skills") or eval_res.get("matched_signals") or []
+                job_copy["score"] = eval_res.get("confidence", 90)
+                matched_jobs.append(job_copy)
 
-        # Sort highest score first, then by title
-        scored.sort(key=lambda j: j.get("score", 0), reverse=True)
-        return scored
+        # Sort highest confidence score first
+        matched_jobs.sort(key=lambda j: j.get("score", 0), reverse=True)
+        return matched_jobs
 
     def handle_message(self, chat_id: str | int, text: str, user_name: str = "", chat_type: str = "user"):
         """
@@ -155,7 +155,7 @@ class TelegramCommandHandler:
             reply = (
                 "🔄 <b>รีเซ็ตคำสั่งค้นหากลับเป็นค่าเริ่มต้นเรียบร้อยแล้วครับ!</b>\n\n"
                 f"📌 <b>Prompt เริ่มต้น:</b> <i>'{Config.DEFAULT_PROMPT}'</i>\n"
-                "(ครอบคลุมงานพัฒนาซอฟต์แวร์, ทำเว็บ, แอปพลิเคชัน, AI และงานไอทีทั่วไป)\n\n"
+                "(ครอบคลุมเฉพาะงานพัฒนาซอฟต์แวร์, ทำเว็บ, แอปพลิเคชัน, AI และงานเขียนโค้ดเท่านั้น โดยคัดกรองงานบัญชี/ธุรการ/งานทั่วไปออก 100%)\n\n"
                 "💡 หากต้องการระบุประเภทงานใหม่ สามารถพิมพ์บอกบอทได้เลยครับ!"
             )
             self.notifier.send_message(chat_id_str, reply)
@@ -165,6 +165,7 @@ class TelegramCommandHandler:
         if lower_text in ("/status", "status", "สถานะ", "เช็ค", "info"):
             stats = database.get_stats()
             user_prompt = database.get_user_prompt(chat_id_str)
+            ai_source = "Gemini LLM + Built-in Semantic AI" if getattr(Config, "GEMINI_API_KEY", "") else "High-Precision Prompt AI (Built-in)"
             if user_prompt:
                 prompt_line = f"🎯 <b>Prompt ค้นหาของคุณ:</b>\n👉 <i>'{html.escape(user_prompt)}'</i>\n"
             else:
@@ -173,13 +174,14 @@ class TelegramCommandHandler:
             status_msg = (
                 "📊 <b>สถานะระบบ Job Alert Bot (Telegram Edition) 🟢</b>\n\n"
                 f"• <b>ฐานข้อมูล:</b> {stats.get('database')}\n"
+                f"• <b>ระบบคัดกรอง:</b> 🧠 <b>{ai_source} 100%</b>\n"
                 f"• <b>ผู้รับการแจ้งเตือน:</b> {stats.get('subscribers_count')} รายการ\n"
                 f"• <b>โควต้าข้อความ:</b> 🚀 <b>ไม่จำกัด (Unlimited Free)</b>\n"
                 f"{prompt_line}\n"
                 f"• <b>สถิติการแจ้งเตือนที่ผ่านมา:</b> รวม {stats.get('total_jobs')} งาน\n"
                 f"  - จาก Fastwork: {stats.get('fastwork_jobs')} งาน\n"
                 f"  - จาก Facebook: {stats.get('facebook_jobs')} งาน\n\n"
-                "ระบบพร้อมทำงานและสแกนประกาศงานด้วย Prompt AI แบบ Real-time ครับ!"
+                "ระบบพร้อมสแกนประกาศงานด้วย Prompt AI แบบ Real-time คัดกรองงานตรงสาย 100% ครับ!"
             )
             self.notifier.send_message(chat_id_str, status_msg)
             return
@@ -189,19 +191,25 @@ class TelegramCommandHandler:
             sample_job = {
                 "source": "Fastwork",
                 "group_name": "Web & Programming",
-                "title": "Full-Stack Web Developer (React + Python FastAPI)",
+                "title": "Full-Stack Web Developer (React + Python FastAPI & AI)",
                 "budget": "35,000 บาท",
                 "content": "ต้องการฟรีแลนซ์พัฒนาระบบหลังบ้านและหน้าบ้านสำหรับระบบจัดการสินค้าและแดชบอร์ด AI มี API พร้อมเชื่อมต่อ สามารถเริ่มงานได้ทันที",
                 "url": "https://fastwork.co",
-                "posted_label": "🟢 ทดสอบระบบ"
+                "posted_label": "🟢 ทดสอบระบบ",
+                "ai_eval": {
+                    "role_category": "Web & AI Development",
+                    "matched_skills": ["React", "Python FastAPI", "AI Dashboard", "REST API"],
+                    "reason": "ตรงกับ Prompt งานพัฒนา Web Application และเชื่อมต่อระบบ AI",
+                    "ai_source": "Prompt AI Engine"
+                }
             }
             sent = self.notifier.send_message(
                 chat_id=chat_id_str,
-                text=self.notifier.format_job_html(sample_job, ["web", "react", "python", "ai", "ทดสอบ"]),
+                text=self.notifier.format_job_html(sample_job, ai_result=sample_job["ai_eval"]),
                 reply_markup=self.notifier.create_inline_keyboard("https://fastwork.co")
             )
             if sent:
-                self.notifier.send_message(chat_id_str, "🧪 <i>ส่งการ์ดแจ้งเตือนงานตัวอย่างให้เรียบร้อยแล้วครับ!</i>")
+                self.notifier.send_message(chat_id_str, "🧪 <i>ส่งการ์ดแจ้งเตือนงานตัวอย่างแบบ Prompt AI ให้เรียบร้อยแล้วครับ!</i>")
             else:
                 self.notifier.send_message(chat_id_str, "⚠️ ไม่สามารถส่งการ์ดทดสอบได้ กรุณาตรวจสอบสถานะ Bot Token")
             return
@@ -221,36 +229,32 @@ class TelegramCommandHandler:
             return
 
         # 10. NATURAL LANGUAGE PROMPT AI / การค้นหางาน
+        from notifier.prompt_ai_engine import PromptAIEngine
         is_prompt = PromptAnalyzer.is_job_search_prompt(raw_text)
         if is_prompt or (chat_type == "user" and len(raw_text) >= 2):
-            analysis = PromptAnalyzer.analyze_prompt(raw_text)
-            extracted_keywords = analysis.get("search_keywords", [])
-            core_terms = analysis.get("core_terms", [])
-            target_display = analysis.get("target_subject") or "งานไอทีและซอฟต์แวร์"
-            domains = analysis.get("detected_domains", [])
-            domain_label = ", ".join(domains) if domains else "ไอที / ซอฟต์แวร์"
+            prompt_info = PromptAIEngine.analyze_user_prompt(raw_text)
+            display_title = prompt_info.get("display_title", "งาน AI และซอฟต์แวร์")
 
             # Save user prompt
             database.save_user_prompt(chat_id_str, raw_text)
 
             # Inform user that prompt is saved and search is underway
-            kws_preview = ", ".join(extracted_keywords[:10])
             ack_msg = (
-                "🎯 <b>บันทึกคำสั่งค้นหาของคุณเรียบร้อยแล้วครับ!</b>\n\n"
+                "🎯 <b>บันทึกคำสั่งค้นหา Prompt AI เรียบร้อยแล้วครับ!</b>\n\n"
                 f"📝 <b>คำสั่งของคุณ:</b> <i>'{html.escape(raw_text)}'</i>\n"
-                f"🏷️ <b>หมวดหมู่งาน:</b> {html.escape(target_display)} ({html.escape(domain_label)})\n"
-                f"🔍 <b>คีย์เวิร์ดที่ AI ตรวจจับ:</b> <code>{html.escape(kws_preview)}</code>\n\n"
-                "🔎 <i>กำลังสแกนงานล่าสุดในรอบ 1 สัปดาห์ที่ตรงกับเงื่อนไขของคุณ กรุณารอสักครู่...</i>"
+                f"🏷️ <b>หมวดหมู่เป้าหมาย:</b> <code>{html.escape(display_title)}</code>\n"
+                "🛡️ <b>การคัดกรอง:</b> <i>ตัดงานบัญชี, ธุรการ, กราฟิก และงานทั่วไปออก 100%</i>\n\n"
+                "🔎 <i>กำลังใช้ Prompt AI สแกนงานสดจาก Fastwork & Facebook กรุณารอสักครู่...</i>"
             )
             self.notifier.send_message(chat_id_str, ack_msg)
 
-            # Live search matching jobs from past 1 week
-            matching_jobs = self._search_live_jobs(extracted_keywords, core_terms)
+            # Live search matching jobs from past 1 week using PromptAIEngine
+            matching_jobs = self._search_live_jobs(raw_text)
 
             if matching_jobs:
                 top_jobs = matching_jobs[:5]  # Send top 5 best matches
                 result_header = (
-                    f"🎉 <b>พบล่าสุด {len(matching_jobs)} งานที่ตรงกับเงื่อนไขของคุณ!</b>\n"
+                    f"🎉 <b>พบ {len(matching_jobs)} งานที่ผ่านการคัดกรองด้วย Prompt AI!</b>\n"
                     f"ส่งตัวอย่าง <b>Top {len(top_jobs)}</b> งานที่น่าสนใจที่สุดให้ด้านล่างนี้ครับ:\n"
                     "━━━━━━━━━━━━━━━━━━━"
                 )
@@ -258,7 +262,7 @@ class TelegramCommandHandler:
 
                 # Send each top job as a rich card with clickable inline button
                 for job in top_jobs:
-                    job_html = self.notifier.format_job_html(job, job.get("matched_keywords", []))
+                    job_html = self.notifier.format_job_html(job, ai_result=job.get("ai_eval"))
                     keyboard = self.notifier.create_inline_keyboard(job.get("url", ""))
                     self.notifier.send_message(chat_id_str, job_html, reply_markup=keyboard)
                     # Mark as delivered to avoid sending duplicate notification later
@@ -267,15 +271,15 @@ class TelegramCommandHandler:
                         database.record_subscriber_received_job(chat_id_str, post_id)
 
                 footer_msg = (
-                    "🔔 <b>ระบบจะคอยเฝ้าติดตามงานใหม่แบบ Real-time ให้คุณตลอด 24 ชม.</b>\n"
-                    "เมื่องานใหม่ที่ตรงกับ Prompt นี้ถูกโพสต์ บอทจะแจ้งเตือนให้ทันทีครับ!"
+                    "🔔 <b>ระบบจะคอยเฝ้าติดตามงานใหม่ด้วย Prompt AI ให้คุณตลอด 24 ชม.</b>\n"
+                    "เมื่องานที่เกี่ยวกับการเขียนโค้ด ซอฟต์แวร์ หรือ AI ถูกโพสต์ บอทจะแจ้งเตือนให้ทันทีครับ!"
                 )
                 self.notifier.send_message(chat_id_str, footer_msg)
             else:
                 empty_msg = (
-                    "🔎 <b>ยังไม่พบงานที่ตรงกับเงื่อนไขนี้ในรอบ 1 สัปดาห์ที่ผ่านมาครับ</b>\n\n"
-                    "📌 <i>แต่บอทได้บันทึก Prompt นี้ไว้แล้ว ระบบจะคอยสแกนงานใหม่ให้ทันทีที่มีผู้ว่าจ้างโพสต์งานครับ!</i>\n\n"
-                    "💡 หรือคุณสามารถลองปรับคำสั่งให้กว้างขึ้น เช่น <i>'งานเขียนโปรแกรม'</i> หรือ <i>'งานไอที'</i> ได้ครับ"
+                    "🔎 <b>ยังไม่พบงานที่ตรงกับเงื่อนไขในรอบ 1 สัปดาห์ที่ผ่านมาครับ</b>\n\n"
+                    "📌 <i>บอทได้บันทึก Prompt นี้ไว้แล้ว ระบบจะคอยสแกนงานใหม่ให้ทันทีที่มีประกาศงานเข้ามาครับ!</i>\n\n"
+                    "💡 หมวดหมู่ที่รองรับ: AI, Machine Learning, Web, Mobile App, Coding, DevOps"
                 )
                 self.notifier.send_message(chat_id_str, empty_msg)
             return

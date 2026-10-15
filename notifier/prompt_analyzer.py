@@ -269,14 +269,10 @@ class PromptAnalyzer:
     @classmethod
     def matches_job_prompt(cls, job: dict, prompt: str = "") -> tuple[bool, list[str]]:
         """
-        Check if a job matches what is requested in a natural language prompt.
+        Check if a job matches what is requested in a natural language prompt using PromptAIEngine.
         Returns (is_match, matched_terms).
         """
-        from notifier.matcher import KeywordMatcher
-        analysis = cls.get_prompt_analysis(prompt)
-        search_terms = analysis.get("search_keywords", [])
-        if not search_terms:
-            return False, []
-
-        matched = KeywordMatcher.matches_job(job, search_terms)
-        return (len(matched) > 0, matched)
+        from notifier.prompt_ai_engine import PromptAIEngine
+        res = PromptAIEngine.evaluate_job(job, prompt)
+        signals = res.get("matched_skills") or res.get("matched_signals") or []
+        return res.get("is_match", False), signals

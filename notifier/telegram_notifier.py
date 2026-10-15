@@ -35,8 +35,8 @@ class TelegramNotifier:
             logger.error(f"[TelegramNotifier] Error in getMe: {e}")
             return {"ok": False, "error": str(e)}
 
-    def format_job_html(self, job: dict, matched_keywords: list[str]) -> str:
-        """Format a single job alert into clean, rich Telegram HTML message."""
+    def format_job_html(self, job: dict, matched_keywords: list[str] = None, ai_result: dict = None) -> str:
+        """Format a single job alert into clean, rich Telegram HTML message with Prompt AI analysis."""
         source = job.get("source", "งานใหม่")
         group_raw = job.get("group_name") or "-"
         title_raw = job.get("title") or "ไม่มีหัวข้อ"
@@ -44,19 +44,25 @@ class TelegramNotifier:
         content_raw = (job.get("content") or "").strip()
         posted_label_raw = job.get("posted_label")
 
+        ai_eval = ai_result or job.get("ai_eval") or {}
+        role_category = ai_eval.get("role_category") or "ซอฟต์แวร์ / AI / การเขียนโค้ด"
+        skills = ai_eval.get("matched_skills") or ai_eval.get("matched_signals") or matched_keywords or []
+        ai_reason = ai_eval.get("reason")
+        ai_source = ai_eval.get("ai_source") or "Prompt AI"
+
         # HTML Escape dynamic contents
         source_esc = html.escape(str(source))
         group_esc = html.escape(str(group_raw))
         title_esc = html.escape(str(title_raw))
         budget_esc = html.escape(str(budget_raw)) if budget_raw else ""
         posted_esc = html.escape(str(posted_label_raw)) if posted_label_raw else ""
+        role_esc = html.escape(str(role_category))
+        skills_esc = html.escape(", ".join(skills[:5])) if skills else "Software / AI"
+        source_tag = "🤖 Gemini AI" if "gemini" in ai_source.lower() else "🧠 Prompt AI"
 
         # Limit content preview
         summary = content_raw[:350] + "..." if len(content_raw) > 350 else (content_raw or "-")
         summary_esc = html.escape(summary)
-
-        kws_str = ", ".join(matched_keywords) if matched_keywords else "-"
-        kws_esc = html.escape(kws_str)
 
         header_icon = "💼" if "fastwork" in source.lower() else "📢"
         header = f"{header_icon} <b>[แจ้งเตือนงานใหม่: {source_esc}]</b>"
@@ -73,7 +79,13 @@ class TelegramNotifier:
         if budget_esc:
             lines.append(f"💰 <b>งบประมาณ:</b> <code>{budget_esc}</code>")
 
-        lines.append(f"🎯 <b>ตรงกับ Prompt:</b> <code>{kws_esc}</code>\n")
+        lines.append(f"🎯 <b>หมวดหมู่งาน:</b> <code>{role_esc}</code> ({source_tag})")
+        lines.append(f"💡 <b>ทักษะที่เกี่ยวข้อง:</b> <code>{skills_esc}</code>")
+        if ai_reason:
+            lines.append(f"✨ <b>ผลวิเคราะห์:</b> <i>{html.escape(ai_reason)}</i>\n")
+        else:
+            lines.append("")
+
         lines.append(f"📄 <b>รายละเอียดสรุป:</b>\n{summary_esc}")
 
         return "\n".join(lines)
@@ -141,7 +153,7 @@ class TelegramNotifier:
             logger.error(f"[TelegramNotifier] Network exception sending to {chat_id}: {e}")
             return False
 
-    def send_job_alert(self, job: dict, matched_keywords: list[str], target_ids: list[str] = None) -> int:
+    def send_job_alert(self, job: dict, matched_keywords: list[str] = None, target_ids: list[str] = None, ai_result: dict = None) -> int:
         """
         Send a job notification to subscribers via Telegram.
         Returns the number of successfully sent messages.
@@ -153,7 +165,7 @@ class TelegramNotifier:
             logger.warning("[TelegramNotifier] No subscribers registered to receive notifications.")
             return 0
 
-        html_text = self.format_job_html(job, matched_keywords)
+        html_text = self.format_job_html(job, matched_keywords=matched_keywords, ai_result=ai_result)
         keyboard = self.create_inline_keyboard(job.get("url", ""))
 
         if not self.is_configured():
