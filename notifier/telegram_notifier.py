@@ -79,10 +79,10 @@ class TelegramNotifier:
         if budget_esc:
             lines.append(f"💰 <b>งบประมาณ:</b> <code>{budget_esc}</code>")
 
-        lines.append(f"🎯 <b>หมวดหมู่งาน:</b> <code>{role_esc}</code> ({source_tag})")
-        lines.append(f"💡 <b>ทักษะที่เกี่ยวข้อง:</b> <code>{skills_esc}</code>")
+        lines.append(f"🎯 <b>สายงาน IT:</b> <code>{role_esc}</code> (🛡️ {source_tag})")
+        lines.append(f"💡 <b>ทักษะ/เทคโนโลยี:</b> <code>{skills_esc}</code>")
         if ai_reason:
-            lines.append(f"✨ <b>ผลวิเคราะห์:</b> <i>{html.escape(ai_reason)}</i>\n")
+            lines.append(f"✨ <b>ผลวิเคราะห์ AI:</b> <i>{html.escape(ai_reason)}</i>\n")
         else:
             lines.append("")
 
